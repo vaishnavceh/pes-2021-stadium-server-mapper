@@ -35,7 +35,7 @@ class TopBar(QFrame):
         # LED Status Indicator Center
         self.lbl_status = QLabel("● READY")
         self.lbl_status.setObjectName("StatusLED")
-        layout.addWidget(self.lbl_status, 1, alignment=None)
+        layout.addWidget(self.lbl_status, 1)
 
         # Theme Selector Right
         lbl_theme = QLabel("Theme:")
