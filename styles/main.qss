@@ -1,0 +1,253 @@
+/* ===================================================================
+   PES 2021 STADIUM SERVER MAPPER — WORKSTATION DARK QSS STYLESHEET
+   =================================================================== */
+
+/* Global Window & Base Panel */
+QMainWindow, QDialog {
+    background-color: #070B12;
+    color: #F1F5F9;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 13px;
+}
+
+QWidget {
+    background-color: transparent;
+    color: #F1F5F9;
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+
+/* Top Command Bar */
+#TopBar {
+    background-color: #0B111C;
+    border-bottom: 1px solid #1E293B;
+    min-height: 48px;
+    max-height: 48px;
+}
+
+#BrandTitle {
+    color: #19A7FF;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+#VersionBadge {
+    background-color: #162232;
+    color: #35D07F;
+    font-size: 10px;
+    font-weight: bold;
+    border-radius: 4px;
+    padding: 3px 6px;
+}
+
+#StatusLED {
+    color: #19A7FF;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+/* Left Navigation Sidebar Rail */
+#Sidebar {
+    background-color: #09101A;
+    border-right: 1px solid #1E293B;
+    min-width: 240px;
+    max-width: 240px;
+}
+
+#SidebarSectionHeader {
+    color: #64748B;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 12px;
+    margin-bottom: 6px;
+}
+
+/* Navigation Buttons */
+QPushButton.NavButton {
+    background-color: #121C2A;
+    color: #F1F5F9;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 14px;
+    text-align: left;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+QPushButton.NavButton:hover {
+    background-color: #19A7FF;
+    color: #FFFFFF;
+}
+
+QPushButton.NavButton:pressed {
+    background-color: #1D4ED8;
+}
+
+QPushButton#BtnScan {
+    background-color: #19A7FF;
+    color: #FFFFFF;
+}
+
+QPushButton#BtnWriteMap {
+    background-color: #35D07F;
+    color: #FFFFFF;
+}
+
+QPushButton#BtnUnresolved {
+    background-color: #FF5C6C;
+    color: #FFFFFF;
+}
+
+QPushButton#BtnAllResolved {
+    background-color: #35D07F;
+    color: #FFFFFF;
+}
+
+/* Dashboard KPI Cards */
+#DashboardCard {
+    background-color: #121C2A;
+    border: 1px solid #1E293B;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+#KPICardTitle {
+    color: #64748B;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+#KPICardValueTotal {
+    color: #19A7FF;
+    font-size: 26px;
+    font-weight: bold;
+}
+
+#KPICardValueAccept {
+    color: #35D07F;
+    font-size: 26px;
+    font-weight: bold;
+}
+
+#KPICardValueReview {
+    color: #FFB547;
+    font-size: 26px;
+    font-weight: bold;
+}
+
+#KPICardValueUnresolved {
+    color: #FF5C6C;
+    font-size: 26px;
+    font-weight: bold;
+}
+
+#KPICardSubtext {
+    color: #94A3B8;
+    font-size: 10px;
+}
+
+/* Filter Bar */
+#FilterBar {
+    background-color: #0B111C;
+    border-radius: 6px;
+    padding: 6px;
+}
+
+/* Inputs & Combo Boxes */
+QLineEdit, QComboBox {
+    background-color: #0F172A;
+    color: #F1F5F9;
+    border: 1px solid #334155;
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+QLineEdit:focus, QComboBox:focus {
+    border: 1px solid #19A7FF;
+}
+
+/* Table View */
+QTableView {
+    background-color: #0B111C;
+    color: #F1F5F9;
+    gridline-color: #1E293B;
+    border: 1px solid #1E293B;
+    border-radius: 6px;
+    selection-background-color: #2563EB;
+    selection-color: #FFFFFF;
+    outline: none;
+}
+
+QHeaderView::section {
+    background-color: #0B111C;
+    color: #94A3B8;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 8px;
+    border: none;
+    border-bottom: 1px solid #1E293B;
+    border-right: 1px solid #1E293B;
+}
+
+/* Right Research Inspector */
+#Inspector {
+    background-color: #0B111C;
+    border-left: 1px solid #1E293B;
+    min-width: 300px;
+    max-width: 300px;
+}
+
+#InspectorSectionTitle {
+    color: #19A7FF;
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+#InspectorPreviewBox {
+    background-color: #070B12;
+    border: 1px solid #1E293B;
+    border-radius: 6px;
+    min-height: 96px;
+    max-height: 96px;
+}
+
+#InspectorCard {
+    background-color: #121C2A;
+    border: 1px solid #1E293B;
+    border-radius: 6px;
+    padding: 10px;
+}
+
+/* Live Terminal Console */
+#TerminalConsole {
+    background-color: #05080D;
+    color: #56E39F;
+    font-family: "Cascadia Mono", "Consolas", monospace;
+    font-size: 12px;
+    border: 1px solid #1E293B;
+    border-radius: 6px;
+    padding: 8px;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    background-color: #0B111C;
+    width: 8px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #334155;
+    min-height: 20px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #19A7FF;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}

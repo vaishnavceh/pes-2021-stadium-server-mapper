@@ -1,12 +1,28 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
+spec_dir = Path(__file__).resolve().parent
 
 a = Analysis(
-    ['stadium_mapper.py'],
-    pathex=['source_PSM'],
+    ['main.py'],
+    pathex=[str(spec_dir)],
     binaries=[],
-    datas=[('V:/Games/eFootball PES 2021/sider/content/stadium-server/settings_PSM', 'settings_PSM')],
-    hiddenimports=[],
+    datas=[
+        (str(spec_dir / 'styles'), 'styles'),
+        ('V:/Games/eFootball PES 2021/sider/content/stadium-server/settings_PSM', 'settings_PSM'),
+    ],
+    hiddenimports=[
+        'PySide6',
+        'PySide6.QtCore',
+        'PySide6.QtWidgets',
+        'PySide6.QtGui',
+        'PIL',
+        'PIL.Image',
+        'fitz',
+        'pymupdf',
+        'requests',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -35,5 +51,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['V:/Games/eFootball PES 2021/sider/content/stadium-server/source_PSM/logo.ico'],
+    icon=[str(spec_dir / 'logo.ico')],
 )
