@@ -102,15 +102,26 @@ class MapGenerator:
         )
         return report
 
-    def write_map_file(self, rows: list[MappedRow], create_backup_first: bool = True) -> bool:
+    def write_map_file(
+        self,
+        rows: list[MappedRow],
+        create_backup_first: bool = True,
+        backup: bool | None = None,
+        disabled_stadiums: set[str] | None = None,
+    ) -> tuple[bool, str]:
         """
         Write rows to map_teams.txt in 4-column format:
             TEAM_ID,STADIUM_ID,STADIUM_NAME,STADIUM_PATH
         Preserves commented-out (#) disabled states from Stadium Server Manager or existing map_teams.txt.
+        Returns: (success: bool, message: str)
         """
+        if backup is not None:
+            create_backup_first = backup
+
         disabled_keys: set[tuple[int, str]] = set()
         disabled_paths: set[str] = set()
 
+        # 1. Read existing disabled entries (#) from map_teams.txt
         if self.map_file_path.exists():
             try:
                 with open(self.map_file_path, "r", encoding="utf-8") as f:
@@ -131,10 +142,18 @@ class MapGenerator:
             except Exception as e:
                 self.logger.warning(f"Could not read existing disabled states from map_teams.txt: {e}")
 
+        # 2. Also incorporate controller's disabled_stadiums
+        if disabled_stadiums:
+            for s in disabled_stadiums:
+                disabled_paths.add(s.lower().strip())
+
         if create_backup_first:
             self.create_backup()
 
         try:
+            active_count = 0
+            disabled_count = 0
+
             with open(self.map_file_path, "w", encoding="utf-8") as f:
                 # Write header documentation
                 f.write("# PES 2021 Stadium Server - Team-to-Stadium Mapping\n")
@@ -148,17 +167,31 @@ class MapGenerator:
 
                 for row in sorted_rows:
                     path_val = row.stadium_path or row.stadium_name
+                    p_lower = path_val.lower().strip()
+                    n_lower = row.stadium_name.lower().strip()
 
-                    # Check if row is disabled via explicit row property or existing map file
                     row_enabled = getattr(row, "enabled", True)
-                    is_disabled = (not row_enabled)
+                    is_disabled = (
+                        (not row_enabled)
+                        or (p_lower in disabled_paths)
+                        or (n_lower in disabled_paths)
+                        or ((row.team_id, p_lower) in disabled_keys)
+                    )
 
-                    prefix = "# " if is_disabled else ""
+                    prefix = "#" if is_disabled else ""
+                    if is_disabled:
+                        disabled_count += 1
+                    else:
+                        active_count += 1
+
                     line = f"{prefix}{row.team_id},{row.stadium_id},{row.stadium_name},{path_val}\n"
                     f.write(line)
 
-            self.logger.info(f"Successfully generated {len(rows)} entries in {self.map_file_path}")
-            return True
+            msg = f"Successfully generated {len(rows)} entries in map_teams.txt ({active_count} Active, {disabled_count} Disabled)."
+            self.logger.info(msg)
+            return True, msg
         except Exception as e:
-            self.logger.error(f"Failed to write map_teams.txt: {e}")
-            return False
+            err_msg = f"Failed to write map_teams.txt: {e}"
+            self.logger.error(err_msg)
+            return False, err_msg
+

@@ -199,10 +199,16 @@ class EditManualMapDialog(QDialog):
         mapped_rows: list[MappedRow] = []
         for r in range(self.table.rowCount()):
             try:
-                tid = int(self.table.item(r, 0).text().strip())
-                sid = self.table.item(r, 1).text().strip()
-                sname = self.table.item(r, 2).text().strip()
-                spath = self.table.item(r, 3).text().strip()
+                item_tid = self.table.item(r, 0)
+                item_sid = self.table.item(r, 1)
+                item_sname = self.table.item(r, 2)
+                item_spath = self.table.item(r, 3)
+                if not (item_tid and item_sid and item_sname and item_spath):
+                    continue
+                tid = int(item_tid.text().strip())
+                sid = item_sid.text().strip()
+                sname = item_sname.text().strip()
+                spath = item_spath.text().strip()
                 mapped_rows.append(MappedRow(team_id=tid, stadium_id=sid, stadium_name=sname, stadium_path=spath, status="MANUAL", confidence=1.0))
             except Exception:
                 pass
@@ -210,9 +216,344 @@ class EditManualMapDialog(QDialog):
         if mapped_rows:
             self.ctrl.set_manual_mappings(self.stadium_name, mapped_rows)
             self.accept()
+        else:
+            QMessageBox.warning(self, "No Mappings", "Please add at least one valid Team ID row before saving.")
+
+
+class UnresolvedResolverDialog(QDialog):
+    """
+    Interactive Unresolved Stadium Resolver Modal Dialog.
+    Steps through all unresolved stadiums with live team search from PDF,
+    pre-filled web research clues, multi-team assignment, Skip, and Save & Next.
+    """
+
+    def __init__(self, controller: StadiumMapperController, parent=None):
+        super().__init__(parent)
+        self.ctrl = controller
+        self.setWindowTitle("⚡ Interactive Unresolved Stadium Resolver")
+        self.resize(780, 620)
+        self.setStyleSheet("background-color: #0B111C; color: #F1F5F9;")
+
+        self.unresolved_stadiums: list[str] = []
+        self._refresh_unresolved()
+        self.current_idx = 0
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+
+        # Header
+        self.lbl_header = QLabel("⚡ UNRESOLVED STADIUM RESOLVER")
+        self.lbl_header.setStyleSheet("color: #19A7FF; font-size: 14px; font-weight: bold;")
+        layout.addWidget(self.lbl_header)
+
+        self.lbl_progress = QLabel("")
+        self.lbl_progress.setStyleSheet("color: #94A3B8; font-size: 11px;")
+        layout.addWidget(self.lbl_progress)
+
+        # Stadium info box
+        info_frame = QFrame()
+        info_frame.setStyleSheet("background-color: #121C2A; border: 1px solid #1E293B; border-radius: 6px; padding: 10px;")
+        info_layout = QVBoxLayout(info_frame)
+        info_layout.setContentsMargins(8, 8, 8, 8)
+        info_layout.setSpacing(4)
+
+        self.lbl_stadium_title = QLabel("")
+        self.lbl_stadium_title.setStyleSheet("color: #F1F5F9; font-size: 13px; font-weight: bold;")
+        info_layout.addWidget(self.lbl_stadium_title)
+
+        self.lbl_stadium_meta = QLabel("")
+        self.lbl_stadium_meta.setStyleSheet("color: #64748B; font-size: 11px;")
+        info_layout.addWidget(self.lbl_stadium_meta)
+
+        self.lbl_web_hint = QLabel("")
+        self.lbl_web_hint.setStyleSheet("color: #35D07F; font-size: 11px; font-style: italic;")
+        info_layout.addWidget(self.lbl_web_hint)
+
+        layout.addWidget(info_frame)
+
+        # Team Search & Autocomplete
+        search_box = QFrame()
+        search_box.setStyleSheet("background-color: #121C2A; border: 1px solid #1E293B; border-radius: 6px; padding: 8px;")
+        search_layout = QVBoxLayout(search_box)
+        search_layout.setContentsMargins(6, 6, 6, 6)
+        search_layout.setSpacing(6)
+
+        lbl_s = QLabel("🔍 Search PES Team from PDF Database:")
+        lbl_s.setStyleSheet("color: #94A3B8; font-weight: bold; font-size: 11px;")
+        search_layout.addWidget(lbl_s)
+
+        search_input_layout = QHBoxLayout()
+        self.txt_team_search = QLineEdit()
+        self.txt_team_search.setPlaceholderText("Type club or team name (e.g., Bournemouth, Arsenal, Real)...")
+        self.txt_team_search.setStyleSheet("background-color: #0B111C; color: #F1F5F9; border: 1px solid #1E293B; border-radius: 4px; padding: 6px;")
+        self.txt_team_search.textChanged.connect(self._on_search_text_changed)
+        search_input_layout.addWidget(self.txt_team_search, 1)
+
+        self.txt_manual_tid = QLineEdit()
+        self.txt_manual_tid.setPlaceholderText("Team ID")
+        self.txt_manual_tid.setFixedWidth(80)
+        self.txt_manual_tid.setStyleSheet("background-color: #0B111C; color: #F1F5F9; border: 1px solid #1E293B; border-radius: 4px; padding: 6px;")
+        search_input_layout.addWidget(self.txt_manual_tid)
+
+        btn_add = QPushButton("➕ Add Team")
+        btn_add.setStyleSheet("background-color: #19A7FF; color: #FFF; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
+        btn_add.clicked.connect(self._add_team_row)
+        search_input_layout.addWidget(btn_add)
+
+        btn_remove = QPushButton("❌ Remove")
+        btn_remove.setStyleSheet("background-color: #FF5C6C; color: #FFF; font-weight: bold; padding: 6px 12px; border-radius: 4px;")
+        btn_remove.clicked.connect(self._remove_selected_row)
+        search_input_layout.addWidget(btn_remove)
+
+        search_layout.addLayout(search_input_layout)
+
+        # List widget for search results
+        self.list_teams = QListWidget()
+        self.list_teams.setFixedHeight(100)
+        self.list_teams.setStyleSheet("background-color: #0B111C; color: #F1F5F9; border: 1px solid #1E293B; border-radius: 4px;")
+        self.list_teams.itemClicked.connect(self._on_team_item_clicked)
+        self.list_teams.itemDoubleClicked.connect(self._on_team_item_double_clicked)
+        search_layout.addWidget(self.list_teams)
+
+        layout.addWidget(search_box)
+
+        # Assigned Mappings Table
+        lbl_tbl = QLabel("Assigned 4-Column Rows for this Stadium:")
+        lbl_tbl.setStyleSheet("color: #94A3B8; font-weight: bold; font-size: 11px;")
+        layout.addWidget(lbl_tbl)
+
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["Team ID", "Stadium ID", "Stadium Name", "Stadium Path"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setStyleSheet("background-color: #121C2A; color: #F1F5F9; gridline-color: #1E293B; border-radius: 4px;")
+        layout.addWidget(self.table, 1)
+
+        # Buttons Bar
+        btn_bar = QHBoxLayout()
+
+        btn_prev = QPushButton("⬅ Previous")
+        btn_prev.setStyleSheet("background-color: #1E293B; color: #F1F5F9; font-weight: bold; padding: 8px 14px; border-radius: 4px;")
+        btn_prev.clicked.connect(self._prev_stadium)
+        btn_bar.addWidget(btn_prev)
+
+        btn_next = QPushButton("Next ➡")
+        btn_next.setStyleSheet("background-color: #1E293B; color: #F1F5F9; font-weight: bold; padding: 8px 14px; border-radius: 4px;")
+        btn_next.clicked.connect(self._next_stadium)
+        btn_bar.addWidget(btn_next)
+
+        btn_skip = QPushButton("⏭ Skip Stadium")
+        btn_skip.setStyleSheet("background-color: #475569; color: #FFF; font-weight: bold; padding: 8px 14px; border-radius: 4px;")
+        btn_skip.clicked.connect(self._skip_current)
+        btn_bar.addWidget(btn_skip)
+
+        btn_bar.addStretch(1)
+
+        btn_save = QPushButton("💾 Save & Next")
+        btn_save.setStyleSheet("background-color: #35D07F; color: #FFF; font-weight: bold; padding: 8px 18px; border-radius: 4px;")
+        btn_save.clicked.connect(self._save_and_next)
+        btn_bar.addWidget(btn_save)
+
+        btn_close = QPushButton("Close")
+        btn_close.setStyleSheet("background-color: #334155; color: #FFF; font-weight: bold; padding: 8px 14px; border-radius: 4px;")
+        btn_close.clicked.connect(self.accept)
+        btn_bar.addWidget(btn_close)
+
+        layout.addLayout(btn_bar)
+
+        self._load_current_stadium()
+
+    def _refresh_unresolved(self) -> None:
+        """Find all stadiums with status UNRESOLVED or no confident match."""
+        states = self.ctrl.get_all_states()
+        self.unresolved_stadiums = [
+            s.stadium_name for s in states
+            if s.status == StadiumStatus.UNRESOLVED or (s.status == StadiumStatus.REVIEW and not s.mapped_rows)
+        ]
+
+    def _load_current_stadium(self) -> None:
+        """Load information and existing mappings for the current unresolved stadium."""
+        if not self.unresolved_stadiums:
+            self.lbl_header.setText("🎉 All Stadiums Resolved!")
+            self.lbl_progress.setText("There are no remaining unresolved stadiums.")
+            self.lbl_stadium_title.setText("All resolved.")
+            self.lbl_stadium_meta.setText("")
+            self.lbl_web_hint.setText("")
+            self.table.setRowCount(0)
+            return
+
+        if self.current_idx >= len(self.unresolved_stadiums):
+            self.current_idx = len(self.unresolved_stadiums) - 1
+        if self.current_idx < 0:
+            self.current_idx = 0
+
+        stadium_name = self.unresolved_stadiums[self.current_idx]
+        total = len(self.unresolved_stadiums)
+        self.lbl_progress.setText(f"Stadium {self.current_idx + 1} of {total}")
+        self.lbl_stadium_title.setText(f"🏟️ {stadium_name}")
+
+        s_obj = next((s for s in self.ctrl.discovered_stadiums if s.display_name == stadium_name), None)
+        st_ids = ", ".join(s_obj.stadium_ids) if s_obj and s_obj.stadium_ids else "000"
+        rel_path = s_obj.relative_path if s_obj else stadium_name
+        self.lbl_stadium_meta.setText(f"Folder: {rel_path} | Stadium IDs: {st_ids}")
+
+        res = self.ctrl.research_results.get(stadium_name)
+        if res and res.club_name:
+            self.lbl_web_hint.setText(f"💡 Web Research Clue: Identified club '{res.club_name}' (Confidence: {res.confidence:.0%})")
+            self.txt_team_search.setText(res.club_name)
+        else:
+            self.lbl_web_hint.setText("💡 Web Research Clue: No club identified automatically. Please search below.")
+            self.txt_team_search.setText(stadium_name)
+
+        # Load existing rows or template row
+        self.table.setRowCount(0)
+        state = self.ctrl.get_stadium_state(stadium_name)
+        primary_id = s_obj.primary_id() if s_obj else "000"
+
+        if state.mapped_rows:
+            for r in state.mapped_rows:
+                self._add_row_to_table(r.team_id, r.stadium_id, r.stadium_name, r.stadium_path)
+        else:
+            self._add_row_to_table(0, primary_id, stadium_name, stadium_name)
+
+    def _add_row_to_table(self, tid: int, sid: str, sname: str, spath: str) -> None:
+        r = self.table.rowCount()
+        self.table.insertRow(r)
+        self.table.setItem(r, 0, QTableWidgetItem(str(tid)))
+        self.table.setItem(r, 1, QTableWidgetItem(str(sid)))
+        self.table.setItem(r, 2, QTableWidgetItem(str(sname)))
+        self.table.setItem(r, 3, QTableWidgetItem(str(spath)))
+
+    def _on_search_text_changed(self, text: str) -> None:
+        """Filter the team list widget live."""
+        self.list_teams.clear()
+        q = text.lower().strip()
+        if not q or len(q) < 2:
+            return
+
+        matches: list[tuple[int, str]] = []
+        for tid, tname in self.ctrl.pdf_parser.id_to_name.items():
+            if q in tname.lower() or q == str(tid):
+                matches.append((tid, tname))
+                if len(matches) >= 20:
+                    break
+
+        for tid, tname in matches:
+            item = QListWidgetItem(f"{tname} (ID: {tid})")
+            item.setData(Qt.UserRole, (tid, tname))
+            self.list_teams.addItem(item)
+
+    def _on_team_item_clicked(self, item: QListWidgetItem) -> None:
+        data = item.data(Qt.UserRole)
+        if data:
+            tid, tname = data
+            self.txt_manual_tid.setText(str(tid))
+
+    def _on_team_item_double_clicked(self, item: QListWidgetItem) -> None:
+        data = item.data(Qt.UserRole)
+        if data:
+            tid, tname = data
+            self.txt_manual_tid.setText(str(tid))
+            self._add_team_row()
+
+    def _add_team_row(self) -> None:
+        """Add the selected/typed team to the mappings table."""
+        tid_str = self.txt_manual_tid.text().strip()
+        if not tid_str.isdigit():
+            # Try to match from search text
+            resolved = self.ctrl.matcher.resolve_team_id(self.txt_team_search.text().strip())
+            if resolved is not None:
+                tid_str = str(resolved)
+            else:
+                QMessageBox.warning(self, "Invalid Team ID", "Please select a team from the list or enter a numeric Team ID.")
+                return
+
+        tid = int(tid_str)
+        stadium_name = self.unresolved_stadiums[self.current_idx] if self.unresolved_stadiums else ""
+        s_obj = next((s for s in self.ctrl.discovered_stadiums if s.display_name == stadium_name), None)
+        primary_id = s_obj.primary_id() if s_obj else "000"
+
+        # Update first empty/zero row if present
+        updated = False
+        for r in range(self.table.rowCount()):
+            it = self.table.item(r, 0)
+            if it and it.text().strip() in ("0", ""):
+                it.setText(str(tid))
+                updated = True
+                break
+
+        if not updated:
+            self._add_row_to_table(tid, primary_id, stadium_name, stadium_name)
+
+    def _remove_selected_row(self) -> None:
+        curr = self.table.currentRow()
+        if curr >= 0 and self.table.rowCount() > 1:
+            self.table.removeRow(curr)
+
+    def _prev_stadium(self) -> None:
+        if self.current_idx > 0:
+            self.current_idx -= 1
+            self._load_current_stadium()
+
+    def _next_stadium(self) -> None:
+        if self.current_idx < len(self.unresolved_stadiums) - 1:
+            self.current_idx += 1
+            self._load_current_stadium()
+
+    def _skip_current(self) -> None:
+        if not self.unresolved_stadiums:
+            return
+        stadium_name = self.unresolved_stadiums[self.current_idx]
+        self.ctrl.mark_skipped(stadium_name)
+        self._refresh_unresolved()
+        if not self.unresolved_stadiums:
+            QMessageBox.information(self, "All Done", "🎉 All stadiums have now been resolved or skipped!")
+            self.accept()
+        else:
+            self._load_current_stadium()
+
+    def _save_and_next(self) -> None:
+        if not self.unresolved_stadiums:
+            self.accept()
+            return
+
+        stadium_name = self.unresolved_stadiums[self.current_idx]
+        mapped_rows: list[MappedRow] = []
+
+        for r in range(self.table.rowCount()):
+            try:
+                it_tid = self.table.item(r, 0)
+                it_sid = self.table.item(r, 1)
+                it_sname = self.table.item(r, 2)
+                it_spath = self.table.item(r, 3)
+                if not (it_tid and it_sid and it_sname and it_spath):
+                    continue
+                tid = int(it_tid.text().strip())
+                if tid == 0:
+                    continue
+                sid = it_sid.text().strip()
+                sname = it_sname.text().strip()
+                spath = it_spath.text().strip()
+                mapped_rows.append(MappedRow(team_id=tid, stadium_id=sid, stadium_name=sname, stadium_path=spath, status="MANUAL", confidence=1.0))
+            except Exception:
+                pass
+
+        if not mapped_rows:
+            QMessageBox.warning(self, "No Team Assigned", "Please assign a valid Team ID before saving, or click 'Skip Stadium'.")
+            return
+
+        self.ctrl.set_manual_mappings(stadium_name, mapped_rows)
+        self._refresh_unresolved()
+
+        if not self.unresolved_stadiums:
+            QMessageBox.information(self, "All Resolved", "🎉 Congratulations! All unresolved stadiums have been resolved!")
+            self.accept()
+        else:
+            self._load_current_stadium()
 
 
 class ContactAdminDialog(QDialog):
+
     """Contact Admin & Private Source Access Subform Modal."""
 
     def __init__(self, parent=None):

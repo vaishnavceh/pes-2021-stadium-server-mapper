@@ -60,8 +60,8 @@ class PersistentResearchCache:
         except Exception as e:
             self.logger.error(f"Error saving cache: {e}")
 
-    def save_state(self, manual_mappings: dict, skipped_stadiums: set) -> None:
-        """Persist manual mappings and skipped stadiums to app_state.json."""
+    def save_state(self, manual_mappings: dict, skipped_stadiums: set, disabled_stadiums: set | None = None) -> None:
+        """Persist manual mappings, skipped stadiums, and disabled stadiums to app_state.json."""
         try:
             import json
             state = {
@@ -72,18 +72,20 @@ class PersistentResearchCache:
                     for k, rows in manual_mappings.items()
                 },
                 "skipped_stadiums": list(skipped_stadiums),
+                "disabled_stadiums": list(disabled_stadiums or set()),
             }
             with open(self.state_path, "w", encoding="utf-8") as f:
                 json.dump(state, f, indent=2, ensure_ascii=False)
         except Exception as e:
             self.logger.error(f"Error saving app state: {e}")
 
-    def load_state(self) -> tuple[dict, set]:
-        """Load manual mappings and skipped stadiums from app_state.json."""
+    def load_state(self) -> tuple[dict, set, set]:
+        """Load manual mappings, skipped stadiums, and disabled stadiums from app_state.json."""
         manual_mappings: dict = {}
         skipped: set = set()
+        disabled: set = set()
         if not self.state_path.exists():
-            return manual_mappings, skipped
+            return manual_mappings, skipped, disabled
         try:
             import json
             with open(self.state_path, "r", encoding="utf-8") as f:
@@ -101,10 +103,12 @@ class PersistentResearchCache:
                     for r in rows_data
                 ]
             skipped = set(state.get("skipped_stadiums", []))
-            self.logger.info(f"Restored {len(manual_mappings)} manual mappings, {len(skipped)} skipped stadiums from state")
+            disabled = set(state.get("disabled_stadiums", []))
+            self.logger.info(f"Restored {len(manual_mappings)} manual mappings, {len(skipped)} skipped, {len(disabled)} disabled from state")
         except Exception as e:
             self.logger.warning(f"Error loading app state: {e}")
-        return manual_mappings, skipped
+        return manual_mappings, skipped, disabled
+
 
     def get(self, stadium_name: str) -> dict[str, Any] | None:
         """Get cached research for a stadium."""
@@ -176,10 +180,11 @@ class StadiumMapperController:
         self.discovered_stadiums: list[DiscoveredStadium] = []
         self.research_results: dict[str, StadiumResearchResult] = {}
 
-        # Restore persisted state (manual mappings + skipped) from previous session
-        self.manual_mappings, self.skipped_stadiums = self.cache.load_state()
+        # Restore persisted state (manual mappings + skipped + disabled) from previous session
+        self.manual_mappings, self.skipped_stadiums, self.disabled_stadiums = self.cache.load_state()
 
         self.load_pdf()
+
 
 
     def configure_paths(self, server_dir: str, pdf_path: str | None = None) -> None:
@@ -304,7 +309,7 @@ class StadiumMapperController:
         if stadium_name in self.skipped_stadiums:
             self.skipped_stadiums.remove(stadium_name)
         self.cache.put_manual_multi(stadium_name, rows)
-        self.cache.save_state(self.manual_mappings, self.skipped_stadiums)
+        self.cache.save_state(self.manual_mappings, self.skipped_stadiums, self.disabled_stadiums)
         return self.get_stadium_state(stadium_name)
 
     def mark_skipped(self, stadium_name: str) -> StadiumState:
@@ -312,8 +317,18 @@ class StadiumMapperController:
         self.skipped_stadiums.add(stadium_name)
         if stadium_name in self.manual_mappings:
             del self.manual_mappings[stadium_name]
-        self.cache.save_state(self.manual_mappings, self.skipped_stadiums)
+        self.cache.save_state(self.manual_mappings, self.skipped_stadiums, self.disabled_stadiums)
         return self.get_stadium_state(stadium_name)
+
+    def set_stadium_disabled(self, stadium_name: str, disabled: bool) -> None:
+        """Mark a stadium as disabled or enabled in map_teams.txt."""
+        name_key = stadium_name.strip()
+        if disabled:
+            self.disabled_stadiums.add(name_key)
+        else:
+            self.disabled_stadiums.discard(name_key)
+            self.disabled_stadiums.discard(name_key.lower())
+        self.cache.save_state(self.manual_mappings, self.skipped_stadiums, self.disabled_stadiums)
 
     def clear_stadium_cache(self, stadium_name: str) -> None:
         """Clear cached research for a single stadium (force re-research on next call)."""
@@ -323,8 +338,6 @@ class StadiumMapperController:
             self.cache.save()
         if stadium_name in self.research_results:
             del self.research_results[stadium_name]
-
-
 
     def get_stadium_state(self, stadium_name: str) -> StadiumState:
         """Single authoritative source of truth for a stadium's mapping state."""
@@ -376,11 +389,15 @@ class StadiumMapperController:
         """Write map_teams.txt file using authoritative mappings."""
         server_dir = self.config.stadium_server_dir
         if not server_dir or not Path(server_dir).exists():
-            return False, "Stadium Server directory not set."
+            return False, "Stadium Server directory not set or directory does not exist."
 
         rows = self.build_mappings()
         generator = MapGenerator(server_dir, self.logger)
-        success, msg = generator.write_map_file(rows, backup=self.config.backup_existing_map)
+        success, msg = generator.write_map_file(
+            rows,
+            create_backup_first=self.config.backup_existing_map,
+            disabled_stadiums=self.disabled_stadiums,
+        )
         return success, msg
 
     def generate_dry_run(self) -> DryRunReport:
@@ -389,3 +406,4 @@ class StadiumMapperController:
         rows = self.build_mappings()
         generator = MapGenerator(server_dir, self.logger)
         return generator.generate_dry_run(rows, len(self.discovered_stadiums))
+

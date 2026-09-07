@@ -27,14 +27,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from ui.dashboard import Dashboard
-from ui.dialogs import CommandPaletteDialog, ContactAdminDialog, EditManualMapDialog
+from ui.dialogs import (
+    CommandPaletteDialog,
+    ContactAdminDialog,
+    EditManualMapDialog,
+    UnresolvedResolverDialog,
+)
 from ui.inspector import Inspector
 from ui.sidebar import Sidebar
 from ui.stadium_manager import StadiumManagerDialog
 from ui.stadium_table import StadiumTableView
-from ui.terminal import LiveTerminal, QtLogConsoleHandler
 from ui.toast import ToastNotification
 from ui.topbar import TopBar
+
 
 
 class WorkerSignals(QObject):
@@ -196,17 +201,13 @@ class MainWindow(QMainWindow):
         filter_layout.addStretch(1)
         center_layout.addWidget(filter_frame)
 
-        # Stadium Table View
+        # Stadium Table View (occupies full center workspace)
         self.stadium_table = StadiumTableView(self.thumbnail_mgr, parent=self)
         self.stadium_table.stadium_selected_signal.connect(self._on_stadium_selected)
         center_layout.addWidget(self.stadium_table, 1)
 
-        # Live Terminal Console
-        self.terminal = LiveTerminal(parent=self)
-        self.terminal.setFixedHeight(140)
-        center_layout.addWidget(self.terminal)
-
         splitter.addWidget(center_widget)
+
 
         # PANE 3: Right Research Inspector Panel
         self.inspector = Inspector(self.thumbnail_mgr, parent=self)
@@ -296,24 +297,23 @@ class MainWindow(QMainWindow):
             return True
 
         worker = AsyncWorker(task)
-        worker.signals.log_msg.connect(self.terminal.append_log, Qt.QueuedConnection)
         worker.signals.finished.connect(self._on_research_finished)
         self.thread_pool.start(worker)
 
     def _on_research_finished(self, result) -> None:
         self.topbar.set_status_text("● READY", "#19A7FF")
         self.sync_ui()
-        ToastNotification(self, "Live web research complete!", "success")
+        QMessageBox.information(self, "Research Complete", "✅ Live web research complete! Stadium identities have been updated.")
 
     @Slot()
     def cmd_generate(self) -> None:
         """Write map_teams.txt file using authoritative mappings."""
         success, msg = self.ctrl.generate_map_file()
         if success:
-            ToastNotification(self, "map_teams.txt written successfully!", "success")
+            QMessageBox.information(self, "map_teams.txt Generated", f"✅ {msg}")
             self.sync_ui()
         else:
-            ToastNotification(self, f"Write Failed: {msg}", "error")
+            QMessageBox.critical(self, "Write Failed", f"❌ Failed to write map_teams.txt:\n{msg}")
 
     @Slot()
     def cmd_dry_run(self) -> None:
@@ -326,18 +326,14 @@ class MainWindow(QMainWindow):
         dlg = StadiumManagerDialog(self.ctrl, self)
         dlg.exec()
         self.sync_ui()
-        ToastNotification(self, "Stadium Manager closed — UI refreshed.", "info")
 
     @Slot()
     def cmd_open_unresolved_resolver(self) -> None:
-        """Open Unresolved Resolver Modal for first unresolved stadium."""
-        unresolved = [s for s in self.ctrl.get_all_states() if s.status == StadiumStatus.UNRESOLVED]
-        if not unresolved:
-            ToastNotification(self, "All stadiums are already resolved!", "success")
-            return
-        dlg = EditManualMapDialog(unresolved[0].stadium_name, self.ctrl, self)
-        if dlg.exec():
-            self.sync_ui()
+        """Open Interactive Unresolved Stadium Resolver Dialog."""
+        dlg = UnresolvedResolverDialog(self.ctrl, self)
+        dlg.exec()
+        self.sync_ui()
+
 
     def _on_stadium_selected(self, stadium_name: str) -> None:
         self._selected_stadium_name = stadium_name
