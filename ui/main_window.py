@@ -30,6 +30,7 @@ from ui.dashboard import Dashboard
 from ui.dialogs import CommandPaletteDialog, ContactAdminDialog, EditManualMapDialog
 from ui.inspector import Inspector
 from ui.sidebar import Sidebar
+from ui.stadium_manager import StadiumManagerDialog
 from ui.stadium_table import StadiumTableView
 from ui.terminal import LiveTerminal, QtLogConsoleHandler
 from ui.toast import ToastNotification
@@ -144,6 +145,7 @@ class MainWindow(QMainWindow):
         self.sidebar.scan_clicked.connect(self.cmd_scan)
         self.sidebar.research_clicked.connect(self.cmd_research)
         self.sidebar.unresolved_clicked.connect(self.cmd_open_unresolved_resolver)
+        self.sidebar.manager_clicked.connect(self._open_stadium_manager)
         self.sidebar.write_map_clicked.connect(self.cmd_generate)
         self.sidebar.dry_run_clicked.connect(self.cmd_dry_run)
         self.sidebar.palette_clicked.connect(self._open_command_palette)
@@ -294,6 +296,7 @@ class MainWindow(QMainWindow):
             return True
 
         worker = AsyncWorker(task)
+        worker.signals.log_msg.connect(self.terminal.append_log, Qt.QueuedConnection)
         worker.signals.finished.connect(self._on_research_finished)
         self.thread_pool.start(worker)
 
@@ -310,13 +313,20 @@ class MainWindow(QMainWindow):
             ToastNotification(self, "map_teams.txt written successfully!", "success")
             self.sync_ui()
         else:
-            QMessageBox.critical(self, "Write Failed", f"Failed to write map_teams.txt:\n{msg}")
+            ToastNotification(self, f"Write Failed: {msg}", "error")
 
     @Slot()
     def cmd_dry_run(self) -> None:
         """Show dry run report dialog."""
         report = self.ctrl.generate_dry_run()
         QMessageBox.information(self, "Dry Run Report", f"=== DRY RUN REPORT ===\n\nTotal Discovered: {report.total_stadiums_found}\nHigh Confidence: {report.high_confidence_count}\nReview Required: {report.review_count}\nUnresolved: {report.unresolved_count}\nProposed Lines: {len(report.proposed_rows)}")
+
+    def _open_stadium_manager(self) -> None:
+        """Open the Stadium Server Manager dialog."""
+        dlg = StadiumManagerDialog(self.ctrl, self)
+        dlg.exec()
+        self.sync_ui()
+        ToastNotification(self, "Stadium Manager closed — UI refreshed.", "info")
 
     @Slot()
     def cmd_open_unresolved_resolver(self) -> None:

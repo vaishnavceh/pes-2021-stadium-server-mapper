@@ -69,9 +69,9 @@ class LiveTerminal(QFrame):
         """)
         layout.addWidget(self.text_edit)
 
-        # Setup Logging Emitter
+        # Setup Logging Emitter — QueuedConnection ensures thread-safe delivery from worker threads
         self.emitter = LogSignalEmitter()
-        self.emitter.log_signal.connect(self.append_log)
+        self.emitter.log_signal.connect(self.append_log, Qt.QueuedConnection)
 
     def append_log(self, msg: str, level_name: str) -> None:
         """Append log message with syntax highlighting colors."""

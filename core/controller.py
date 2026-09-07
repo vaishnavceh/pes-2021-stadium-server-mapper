@@ -27,12 +27,14 @@ from web_research import (
 
 
 class PersistentResearchCache:
-    """Auditable research cache stored in data/research_cache.json."""
+    """Auditable research cache stored in settings_PSM/data/research_cache.json."""
 
     def __init__(self, base_dir: Path, logger: logging.Logger | None = None):
-        self.data_dir = base_dir / "data"
-        self.data_dir.mkdir(exist_ok=True)
-        self.cache_path = self.data_dir / "research_cache.json"
+        # Store cache in settings_PSM/data/ for portability
+        data_dir = base_dir / "settings_PSM" / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        self.cache_path = data_dir / "research_cache.json"
+        self.state_path = data_dir / "app_state.json"
         self.logger = logger or logging.getLogger("stadium_mapper.cache")
         self.cache: dict[str, dict[str, Any]] = {}
         self.load()
@@ -57,6 +59,52 @@ class PersistentResearchCache:
                 json.dump(self.cache, f, indent=2, ensure_ascii=False)
         except Exception as e:
             self.logger.error(f"Error saving cache: {e}")
+
+    def save_state(self, manual_mappings: dict, skipped_stadiums: set) -> None:
+        """Persist manual mappings and skipped stadiums to app_state.json."""
+        try:
+            import json
+            state = {
+                "manual_mappings": {
+                    k: [{"team_id": r.team_id, "stadium_id": r.stadium_id, "stadium_name": r.stadium_name,
+                          "stadium_path": r.stadium_path, "status": r.status, "confidence": r.confidence}
+                         for r in rows]
+                    for k, rows in manual_mappings.items()
+                },
+                "skipped_stadiums": list(skipped_stadiums),
+            }
+            with open(self.state_path, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            self.logger.error(f"Error saving app state: {e}")
+
+    def load_state(self) -> tuple[dict, set]:
+        """Load manual mappings and skipped stadiums from app_state.json."""
+        manual_mappings: dict = {}
+        skipped: set = set()
+        if not self.state_path.exists():
+            return manual_mappings, skipped
+        try:
+            import json
+            with open(self.state_path, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            for k, rows_data in state.get("manual_mappings", {}).items():
+                manual_mappings[k] = [
+                    MappedRow(
+                        team_id=r.get("team_id", 0),
+                        stadium_id=r.get("stadium_id", "000"),
+                        stadium_name=r.get("stadium_name", k),
+                        stadium_path=r.get("stadium_path", k),
+                        status=r.get("status", "MANUAL"),
+                        confidence=r.get("confidence", 1.0),
+                    )
+                    for r in rows_data
+                ]
+            skipped = set(state.get("skipped_stadiums", []))
+            self.logger.info(f"Restored {len(manual_mappings)} manual mappings, {len(skipped)} skipped stadiums from state")
+        except Exception as e:
+            self.logger.warning(f"Error loading app state: {e}")
+        return manual_mappings, skipped
 
     def get(self, stadium_name: str) -> dict[str, Any] | None:
         """Get cached research for a stadium."""
@@ -127,19 +175,12 @@ class StadiumMapperController:
 
         self.discovered_stadiums: list[DiscoveredStadium] = []
         self.research_results: dict[str, StadiumResearchResult] = {}
-        self.manual_mappings: dict[str, list[MappedRow]] = {}
-        self.skipped_stadiums: set[str] = set()
 
-        # Auto-detect server directory if not configured
-        if not self.config.stadium_server_dir or not Path(self.config.stadium_server_dir).exists():
-            if (self.base_dir / "map_teams.txt").exists():
-                self.config_mgr.update(stadium_server_dir=str(self.base_dir))
-            elif (self.base_dir.parent / "map_teams.txt").exists():
-                self.config_mgr.update(stadium_server_dir=str(self.base_dir.parent))
-            else:
-                self.config_mgr.update(stadium_server_dir=str(self.base_dir))
+        # Restore persisted state (manual mappings + skipped) from previous session
+        self.manual_mappings, self.skipped_stadiums = self.cache.load_state()
 
         self.load_pdf()
+
 
     def configure_paths(self, server_dir: str, pdf_path: str | None = None) -> None:
         """Update server directory and optionally PDF path."""
@@ -263,6 +304,7 @@ class StadiumMapperController:
         if stadium_name in self.skipped_stadiums:
             self.skipped_stadiums.remove(stadium_name)
         self.cache.put_manual_multi(stadium_name, rows)
+        self.cache.save_state(self.manual_mappings, self.skipped_stadiums)
         return self.get_stadium_state(stadium_name)
 
     def mark_skipped(self, stadium_name: str) -> StadiumState:
@@ -270,7 +312,19 @@ class StadiumMapperController:
         self.skipped_stadiums.add(stadium_name)
         if stadium_name in self.manual_mappings:
             del self.manual_mappings[stadium_name]
+        self.cache.save_state(self.manual_mappings, self.skipped_stadiums)
         return self.get_stadium_state(stadium_name)
+
+    def clear_stadium_cache(self, stadium_name: str) -> None:
+        """Clear cached research for a single stadium (force re-research on next call)."""
+        key = stadium_name.lower().strip()
+        if key in self.cache.cache:
+            del self.cache.cache[key]
+            self.cache.save()
+        if stadium_name in self.research_results:
+            del self.research_results[stadium_name]
+
+
 
     def get_stadium_state(self, stadium_name: str) -> StadiumState:
         """Single authoritative source of truth for a stadium's mapping state."""

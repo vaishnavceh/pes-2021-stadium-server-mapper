@@ -1,17 +1,24 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
-# Ensure source directory is on sys.path
-BASE_DIR = Path(__file__).resolve().parent
+# ─────────────────────────────────────────────────────────────────
+# Determine BASE_DIR (source code location) and ROOT_DIR (exe/data location)
+# BASE_DIR: where the Python source files live (always the .py directory)
+# ROOT_DIR: where settings_PSM + stadium server data lives (exe parent when frozen)
+# ─────────────────────────────────────────────────────────────────
+if getattr(sys, "frozen", False):
+    # Running as PyInstaller standalone exe
+    BASE_DIR = Path(sys._MEIPASS).resolve()
+    ROOT_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+    ROOT_DIR = BASE_DIR
+
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
-
-# Resolve root directory containing settings_PSM or stadium-server files
-ROOT_DIR = BASE_DIR.parent if (BASE_DIR.parent / "settings_PSM").exists() else BASE_DIR
 
 from core.controller import StadiumMapperController
 
@@ -62,19 +69,44 @@ def main() -> int:
     if args.no_gui or args.auto or args.dry_run:
         return run_cli_mode(controller, args)
 
-    # PySide6 Presentation Layer GUI Entry Point
+    # ── PySide6 GUI Entry Point ──────────────────────────────────
     from PySide6.QtWidgets import QApplication
-    from ui.main_window import MainWindow
+    from PySide6.QtCore import QTimer
 
     app = QApplication(sys.argv)
     app.setApplicationName("PES 2021 Stadium Server Mapper")
     app.setOrganizationName("PES Modding Tools")
 
+    # Splash Screen
+    from ui.splash import SplashScreen
+    logo_path = controller.config.custom_logo_path or ""
+    splash = SplashScreen(logo_path)
+    splash.show()
+    app.processEvents()
+
+    # Build MainWindow
+    from ui.main_window import MainWindow
     main_win = MainWindow(controller)
-    main_win.show()
+
+    # Show main window and close splash after a short delay
+    def _show_main():
+        splash.stop_animation()
+        splash.finish(main_win)
+        main_win.show()
+
+        # Auto-start music if configured
+        if controller.config.play_music_on_start:
+            music_path = controller.config.custom_music_path
+            if music_path and Path(music_path).exists():
+                main_win.audio_player.play(music_path, volume=controller.config.music_volume)
+                main_win.topbar.btn_music.setText("⏸ Pause")
+                main_win.ctrl.logger.info("Auto-started background music on launch.")
+
+    QTimer.singleShot(2500, _show_main)
 
     return app.exec()
 
 
 if __name__ == "__main__":
     sys.exit(main())
+
