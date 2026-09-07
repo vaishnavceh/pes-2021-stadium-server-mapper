@@ -327,3 +327,159 @@ class CommandPaletteDialog(QDialog):
             cmd_func = self.actions[idx][1]
             self.accept()
             cmd_func()
+
+
+class SettingsDialog(QDialog):
+    """Settings configuration dialog for all AppConfig fields."""
+
+    def __init__(self, controller, parent=None):
+        super().__init__(parent)
+        self.ctrl = controller
+        self.cfg = controller.config
+
+        self.setWindowTitle("⚙ Settings — PES Stadium Mapper")
+        self.resize(620, 540)
+        self.setStyleSheet("background-color: #0B111C; color: #F1F5F9;")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        lbl_hdr = QLabel("⚙ APPLICATION SETTINGS")
+        lbl_hdr.setStyleSheet("color: #19A7FF; font-size: 15px; font-weight: bold;")
+        layout.addWidget(lbl_hdr)
+
+        grid = QGridLayout()
+        grid.setSpacing(10)
+        row = 0
+
+        def add_row(label_text, widget):
+            nonlocal row
+            lbl = QLabel(label_text)
+            lbl.setStyleSheet("color: #94A3B8; font-weight: bold; font-size: 11px;")
+            grid.addWidget(lbl, row, 0)
+            grid.addWidget(widget, row, 1)
+            row += 1
+
+        def styled_edit(placeholder="", text=""):
+            w = QLineEdit()
+            w.setPlaceholderText(placeholder)
+            w.setText(text)
+            w.setStyleSheet("background-color: #121C2A; color: #F1F5F9; border: 1px solid #1E293B; border-radius: 4px; padding: 6px;")
+            return w
+
+        def browse_row(label_text, attr_name, placeholder):
+            nonlocal row
+            lbl = QLabel(label_text)
+            lbl.setStyleSheet("color: #94A3B8; font-weight: bold; font-size: 11px;")
+            grid.addWidget(lbl, row, 0)
+            h = QHBoxLayout()
+            h.setSpacing(6)
+            edit = styled_edit(placeholder, getattr(self.cfg, attr_name, ""))
+            edit.setObjectName(attr_name)
+            h.addWidget(edit)
+            btn = QPushButton("Browse…")
+            btn.setFixedWidth(80)
+            btn.setStyleSheet("background-color: #162232; color: #19A7FF; font-weight: bold; border: 1px solid #1E293B; border-radius: 4px; padding: 4px;")
+            btn.clicked.connect(lambda _, e=edit, is_dir=(attr_name == "stadium_server_dir"): self._browse(e, is_dir))
+            h.addWidget(btn)
+            container = QWidget()
+            container.setLayout(h)
+            grid.addWidget(container, row, 1)
+            row += 1
+            return edit
+
+        # Paths
+        lbl_paths = QLabel("── PATHS ──────────────────────────")
+        lbl_paths.setStyleSheet("color: #334155; font-size: 10px;")
+        grid.addWidget(lbl_paths, row, 0, 1, 2); row += 1
+
+        self.ed_server_dir = browse_row("Stadium Server Directory", "stadium_server_dir", "e.g. V:/sider/content/stadium-server")
+        self.ed_pdf_path = browse_row("Team IDs PDF Path", "team_pdf_path", "e.g. settings_PSM/pdf/PES2021_Team_IDs.pdf")
+        self.ed_music_path = browse_row("Custom Music Path", "custom_music_path", "e.g. settings_PSM/audio/theme.mp3")
+        self.ed_logo_path = browse_row("Custom Logo Path", "custom_logo_path", "e.g. settings_PSM/misc/logo.png")
+
+        # Thresholds
+        lbl_thresh = QLabel("── CONFIDENCE THRESHOLDS ─────────")
+        lbl_thresh.setStyleSheet("color: #334155; font-size: 10px;")
+        grid.addWidget(lbl_thresh, row, 0, 1, 2); row += 1
+
+        self.ed_auto_accept = styled_edit("0.90", str(self.cfg.auto_accept_threshold))
+        add_row("Auto-Accept Threshold (0.0–1.0)", self.ed_auto_accept)
+        self.ed_review = styled_edit("0.75", str(self.cfg.review_threshold))
+        add_row("Review Threshold (0.0–1.0)", self.ed_review)
+
+        # Music volume
+        lbl_misc = QLabel("── AUDIO & DISPLAY ─────────────────")
+        lbl_misc.setStyleSheet("color: #334155; font-size: 10px;")
+        grid.addWidget(lbl_misc, row, 0, 1, 2); row += 1
+
+        self.ed_volume = styled_edit("0–100", str(self.cfg.music_volume))
+        add_row("Music Volume (0–100)", self.ed_volume)
+
+        self.chk_music_start = QCheckBox("Play music on startup")
+        self.chk_music_start.setChecked(self.cfg.play_music_on_start)
+        self.chk_music_start.setStyleSheet("color: #F1F5F9;")
+        add_row("", self.chk_music_start)
+
+        self.chk_cache = QCheckBox("Enable research cache")
+        self.chk_cache.setChecked(self.cfg.enable_cache)
+        self.chk_cache.setStyleSheet("color: #F1F5F9;")
+        add_row("", self.chk_cache)
+
+        # API Keys
+        lbl_api = QLabel("── API KEYS (optional) ─────────────")
+        lbl_api.setStyleSheet("color: #334155; font-size: 10px;")
+        grid.addWidget(lbl_api, row, 0, 1, 2); row += 1
+
+        self.ed_google_key = styled_edit("Google API Key", self.cfg.google_api_key)
+        add_row("Google API Key", self.ed_google_key)
+        self.ed_google_cx = styled_edit("Google CSE ID", self.cfg.google_search_engine_id)
+        add_row("Google CSE ID", self.ed_google_cx)
+        self.ed_bing_key = styled_edit("Bing API Key", self.cfg.bing_api_key)
+        add_row("Bing API Key", self.ed_bing_key)
+
+        layout.addLayout(grid)
+        layout.addStretch(1)
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_save = QPushButton("💾 Save Settings")
+        btn_save.setStyleSheet("background-color: #35D07F; color: #FFFFFF; font-weight: bold; padding: 8px 16px; border-radius: 4px;")
+        btn_save.clicked.connect(self._save)
+        btn_row.addWidget(btn_save)
+
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.setStyleSheet("background-color: #334155; color: #FFFFFF; font-weight: bold; padding: 8px 16px; border-radius: 4px;")
+        btn_cancel.clicked.connect(self.reject)
+        btn_row.addWidget(btn_cancel)
+        layout.addLayout(btn_row)
+
+    def _browse(self, edit: QLineEdit, is_dir: bool) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        if is_dir:
+            path = QFileDialog.getExistingDirectory(self, "Select Folder", edit.text() or "")
+        else:
+            path, _ = QFileDialog.getOpenFileName(self, "Select File", edit.text() or "")
+        if path:
+            edit.setText(path)
+
+    def _save(self) -> None:
+        try:
+            self.ctrl.config_mgr.update(
+                stadium_server_dir=self.ed_server_dir.text().strip(),
+                team_pdf_path=self.ed_pdf_path.text().strip(),
+                custom_music_path=self.ed_music_path.text().strip(),
+                custom_logo_path=self.ed_logo_path.text().strip(),
+                auto_accept_threshold=float(self.ed_auto_accept.text().strip() or "0.90"),
+                review_threshold=float(self.ed_review.text().strip() or "0.75"),
+                music_volume=int(self.ed_volume.text().strip() or "50"),
+                play_music_on_start=self.chk_music_start.isChecked(),
+                enable_cache=self.chk_cache.isChecked(),
+                google_api_key=self.ed_google_key.text().strip(),
+                google_search_engine_id=self.ed_google_cx.text().strip(),
+                bing_api_key=self.ed_bing_key.text().strip(),
+            )
+            self.accept()
+        except ValueError as e:
+            QMessageBox.warning(self, "Invalid Value", f"Please check your input values:\n{e}")

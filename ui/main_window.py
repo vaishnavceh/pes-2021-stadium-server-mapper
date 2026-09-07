@@ -130,6 +130,7 @@ class MainWindow(QMainWindow):
         # 1. TOP BAR
         self.topbar = TopBar(parent=self)
         self.topbar.toggle_music_signal.connect(self._toggle_music)
+        self.topbar.open_settings_signal.connect(self._open_settings)
         self.topbar.open_contact_admin_signal.connect(self._open_contact_admin)
         main_layout.addWidget(self.topbar)
 
@@ -361,9 +362,33 @@ class MainWindow(QMainWindow):
         ToastNotification(self, f"Marked {stadium_name} as skipped", "warning")
 
     def _toggle_music(self) -> None:
-        if self.ctrl.config.custom_music_path:
-            self.audio_player.play(self.ctrl.config.custom_music_path, self.ctrl.config.music_volume)
-            ToastNotification(self, "Playing ambient audio theme...", "info")
+        """Toggle ambient music playback. Play if stopped, pause/resume if already playing."""
+        if self.audio_player.is_playing and not self.audio_player.is_paused:
+            self.audio_player.pause()
+            self.topbar.btn_music.setText("▶ Resume")
+            ToastNotification(self, "Music paused.", "info")
+        elif self.audio_player.is_playing and self.audio_player.is_paused:
+            self.audio_player.resume()
+            self.topbar.btn_music.setText("⏸ Pause")
+            ToastNotification(self, "Music resumed.", "info")
+        else:
+            music_path = self.ctrl.config.custom_music_path
+            if music_path and Path(music_path).exists():
+                self.audio_player.play(music_path, volume=self.ctrl.config.music_volume)
+                self.topbar.btn_music.setText("⏸ Pause")
+                ToastNotification(self, "Playing ambient audio theme...", "info")
+            else:
+                ToastNotification(self, "No music file configured. Set one in ⚙ Settings.", "warning")
+
+    def _open_settings(self) -> None:
+        """Open the Settings configuration dialog."""
+        from ui.dialogs import SettingsDialog
+        dlg = SettingsDialog(self.ctrl, self)
+        if dlg.exec():
+            ToastNotification(self, "Settings saved successfully.", "success")
+            # Re-apply music volume if music is currently playing
+            if self.audio_player.is_playing:
+                self.audio_player.set_volume(self.ctrl.config.music_volume)
 
     def _open_contact_admin(self) -> None:
         dlg = ContactAdminDialog(self)
