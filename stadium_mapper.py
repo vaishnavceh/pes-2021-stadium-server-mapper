@@ -1302,6 +1302,18 @@ class StadiumMapperGUI:
             pady=3,
         ).pack(side=tk.LEFT, padx=4)
 
+        tk.Button(
+            top_ctrl,
+            text="💬 Contact Admin",
+            command=self._open_contact_admin_dialog,
+            bg="#162232",
+            fg="#F1F5F9",
+            font=("Segoe UI", 8, "bold"),
+            relief=tk.FLAT,
+            padx=8,
+            pady=3,
+        ).pack(side=tk.LEFT, padx=4)
+
         # Middle Workspace Container
         body_box = tk.Frame(main_box, bg="#070B12")
         body_box.pack(fill=tk.BOTH, expand=True)
@@ -1340,6 +1352,7 @@ class StadiumMapperGUI:
         make_side_btn("🏟️ Stadium Server Manager", self._open_stadium_server_manager_dialog, "#162232")
         make_side_btn("💾 Write map_teams.txt", self._cmd_generate, "#35D07F")
         make_side_btn("📊 Dry Run Report", self._cmd_dry_run)
+        make_side_btn("💬 Contact Admin", self._open_contact_admin_dialog, "#162232")
         make_side_btn("⌨️ Command Palette", self._open_command_palette, "#162232")
 
         # Search Provider Selector Section
@@ -1919,6 +1932,7 @@ class StadiumMapperGUI:
             ("Generate map_teams.txt File", self._cmd_generate),
             ("Generate Dry Run Report", self._cmd_dry_run),
             ("Open Settings & Customization", self._open_customization_dialog),
+            ("Contact Admin & Source Access", self._open_contact_admin_dialog),
             ("Clear Terminal Console Log", self._clear_console),
         ]
 
@@ -1935,6 +1949,118 @@ class StadiumMapperGUI:
         list_box.bind("<Double-1>", execute_selected)
         dlg.bind("<Return>", execute_selected)
         dlg.bind("<Escape>", lambda e: dlg.destroy())
+
+    def _open_contact_admin_dialog(self) -> None:
+        """Open Contact Admin subform modal displaying admin details and source access note."""
+        win = tk.Toplevel(self.root)
+        win.title("Contact Admin — PES Stadium Mapper")
+        win.geometry("520x320")
+        win.resizable(False, False)
+        win.configure(bg="#0B111C")
+
+        if hasattr(self, "app_icon"):
+            win.iconphoto(True, self.app_icon)
+
+        win.transient(self.root)
+        win.grab_set()
+
+        # Center dialog
+        win.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() - 520) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - 320) // 2
+        win.geometry(f"+{x}+{y}")
+
+        # Top Banner
+        hdr = tk.Frame(win, bg="#121C2A", height=60, padx=20)
+        hdr.pack(fill=tk.X)
+        hdr.pack_propagate(False)
+
+        tk.Label(hdr, text="💬 CONTACT ADMIN", font=("Segoe UI", 12, "bold"), fg="#19A7FF", bg="#121C2A").pack(side=tk.LEFT, pady=16)
+
+        # Body Container
+        body = tk.Frame(win, bg="#0B111C", padx=24, pady=20)
+        body.pack(fill=tk.BOTH, expand=True)
+
+        # Main Notice Box
+        box = tk.Frame(body, bg="#162232", bd=1, relief=tk.SOLID, padx=16, pady=16)
+        box.pack(fill=tk.X, pady=(0, 16))
+
+        tk.Label(
+            box,
+            text="🔒 Source code is private. Contact admin for access.",
+            font=("Segoe UI", 10, "bold"),
+            fg="#FF5C6C",
+            bg="#162232",
+            justify=tk.LEFT
+        ).pack(anchor=tk.W, pady=(0, 8))
+
+        tk.Label(
+            box,
+            text="For source code access, custom feature requests, bug reports, or technical support, please reach out to the project administrator via Reddit:",
+            font=("Segoe UI", 9),
+            fg="#94A3B8",
+            bg="#162232",
+            wraplength=440,
+            justify=tk.LEFT
+        ).pack(anchor=tk.W, pady=(0, 12))
+
+        # Reddit Link Row
+        link_frame = tk.Frame(box, bg="#0F172A", padx=10, pady=8)
+        link_frame.pack(fill=tk.X)
+
+        tk.Label(link_frame, text="Reddit User:", font=("Segoe UI", 9, "bold"), fg="#19A7FF", bg="#0F172A").pack(side=tk.LEFT, padx=(0, 8))
+
+        reddit_url = "https://www.reddit.com/user/Available_Chipmunk27/"
+        lbl_url = tk.Label(link_frame, text=reddit_url, font=("Segoe UI", 9, "underline"), fg="#35D07F", bg="#0F172A", cursor="hand2")
+        lbl_url.pack(side=tk.LEFT)
+
+        import webbrowser
+        lbl_url.bind("<Button-1>", lambda e: webbrowser.open_new_tab(reddit_url))
+
+        # Action Buttons
+        btn_frame = tk.Frame(body, bg="#0B111C")
+        btn_frame.pack(fill=tk.X)
+
+        def copy_url():
+            self.root.clipboard_clear()
+            self.root.clipboard_append(reddit_url)
+            messagebox.showinfo("Copied", "Reddit profile URL copied to clipboard!", parent=win)
+
+        tk.Button(
+            btn_frame,
+            text="📋 Copy Link",
+            command=copy_url,
+            bg="#19A7FF",
+            fg="#FFFFFF",
+            font=("Segoe UI", 9, "bold"),
+            relief=tk.FLAT,
+            padx=14,
+            pady=6
+        ).pack(side=tk.LEFT, padx=(0, 8))
+
+        tk.Button(
+            btn_frame,
+            text="🌐 Open in Browser",
+            command=lambda: webbrowser.open_new_tab(reddit_url),
+            bg="#35D07F",
+            fg="#FFFFFF",
+            font=("Segoe UI", 9, "bold"),
+            relief=tk.FLAT,
+            padx=14,
+            pady=6
+        ).pack(side=tk.LEFT)
+
+        tk.Button(
+            btn_frame,
+            text="Close",
+            command=win.destroy,
+            bg="#334155",
+            fg="#FFFFFF",
+            font=("Segoe UI", 9, "bold"),
+            relief=tk.FLAT,
+            padx=14,
+            pady=6
+        ).pack(side=tk.RIGHT)
 
     # ===================================================================
     # FULL 4-COLUMN MANUAL STADIUM MAPPER EDITOR MODAL
