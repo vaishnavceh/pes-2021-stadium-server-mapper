@@ -74,7 +74,7 @@ class MainWindow(QMainWindow):
         self.thumbnail_mgr = self.ctrl.thumbnail_mgr
         self.thread_pool = QThreadPool.globalInstance()
 
-        self.setWindowTitle(f"PES 2021 Stadium Server Mapper — {self.ctrl.config.app_name}")
+        self.setWindowTitle("PES 2021 Stadium Server Mapper — Nightly Build 1.0.0")
         self.resize(1380, 900)
         self.setMinimumSize(1100, 720)
 

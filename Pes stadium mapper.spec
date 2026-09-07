@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-spec_dir = Path(__file__).resolve().parent
+spec_dir = Path(SPECPATH).resolve()
 
 a = Analysis(
     ['main.py'],
