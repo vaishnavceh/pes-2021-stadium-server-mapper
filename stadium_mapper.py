@@ -1195,8 +1195,8 @@ class StadiumMapperGUI:
         if hasattr(self, "inspector_frame"):
             self.inspector_frame.configure(bg=t["inspector_bg"])
 
-        # Treeview styling
-        self.style.configure("Treeview", background=t["tree_bg"], foreground=t["tree_fg"], fieldbackground=t["tree_bg"], rowheight=28, font=("Segoe UI", 9))
+        # Treeview styling (Generous rowheight=42 for spacious DDS thumbnail rendering)
+        self.style.configure("Treeview", background=t["tree_bg"], foreground=t["tree_fg"], fieldbackground=t["tree_bg"], rowheight=42, font=("Segoe UI", 9))
         self.style.configure("Treeview.Heading", background=header_bg, foreground=header_fg, font=("Segoe UI", 9, "bold"))
         self.style.map("Treeview", background=[("selected", t["tree_select"])], foreground=[("selected", "#FFFFFF")])
 
@@ -1447,13 +1447,13 @@ class StadiumMapperGUI:
         self.tree.heading("team_id", text="PES TEAM ID")
         self.tree.heading("confidence", text="CONFIDENCE METER")
 
-        self.tree.column("#0", width=75, minwidth=60, anchor=tk.CENTER)
-        self.tree.column("status", width=120, anchor=tk.CENTER)
-        self.tree.column("stadium_name", width=200)
-        self.tree.column("stadium_id", width=90, anchor=tk.CENTER)
-        self.tree.column("web_club", width=220)
-        self.tree.column("team_id", width=95, anchor=tk.CENTER)
-        self.tree.column("confidence", width=140, anchor=tk.CENTER)
+        self.tree.column("#0", width=85, minwidth=70, anchor=tk.CENTER)
+        self.tree.column("status", width=160, minwidth=130, anchor=tk.CENTER)
+        self.tree.column("stadium_name", width=220, minwidth=150)
+        self.tree.column("stadium_id", width=100, minwidth=80, anchor=tk.CENTER)
+        self.tree.column("web_club", width=240, minwidth=150)
+        self.tree.column("team_id", width=110, minwidth=80, anchor=tk.CENTER)
+        self.tree.column("confidence", width=160, minwidth=120, anchor=tk.CENTER)
 
         scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscroll=scrollbar.set)
@@ -1653,9 +1653,12 @@ class StadiumMapperGUI:
         self._search_timer = self.root.after(100, self._do_apply_filter)
 
     def _do_apply_filter(self) -> None:
-        """Execute table view filter."""
+        """Execute table view filter and report matched count."""
         q = self.search_var.get().lower().strip()
         st_filter = self.status_filter_var.get()
+
+        visible_count = 0
+        total_count = len(self.tree.get_children())
 
         for item in self.tree.get_children():
             name = item
@@ -1672,8 +1675,14 @@ class StadiumMapperGUI:
 
             if match_status and match_search:
                 self.tree.reattach(item, "", tk.END)
+                visible_count += 1
             else:
                 self.tree.detach(item)
+
+        if st_filter != "ALL":
+            self.status_var.set(f"● FILTER [{st_filter}]: {visible_count} of {total_count} Stadiums Shown")
+        else:
+            self.status_var.set("● READY")
 
     def _populate_tree(self, stadiums: list[DiscoveredStadium]) -> None:
         """Populate treeview with discovered stadiums and live DDS thumbnails."""
