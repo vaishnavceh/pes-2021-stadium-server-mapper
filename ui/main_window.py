@@ -98,7 +98,6 @@ class MainWindow(QMainWindow):
 
         self._load_qss_stylesheet()
         self._build_ui()
-        self._setup_logging_stream()
 
         # Keyboard Shortcuts
         QShortcut(QKeySequence("Ctrl+K"), self, self._open_command_palette)
@@ -118,11 +117,6 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 self.ctrl.logger.warning(f"Failed to load main.qss: {e}")
 
-    def _setup_logging_stream(self) -> None:
-        """Connect logging handler to Live Terminal console."""
-        console_handler = QtLogConsoleHandler(self.terminal.emitter)
-        console_handler.setFormatter(logging.Formatter("[%(asctime)s] > %(message)s", datefmt="%H:%M:%S"))
-        self.ctrl.logger.addHandler(console_handler)
 
     def _build_ui(self) -> None:
         """Construct PySide6 3-pane main workstation layout."""
