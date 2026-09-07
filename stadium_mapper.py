@@ -1032,8 +1032,9 @@ class StadiumMapperGUI:
         # Hide main window during splash screen
         self.root.withdraw()
 
-        # Native Audio Player
+        # Native Audio Player & DDS Thumbnail Loader
         self.audio_player = WinAudioPlayer(logger=self.ctrl.logger)
+        self.dds_loader = DdsThumbnailLoader()
 
         self.style = ttk.Style()
         self.style.theme_use("clam")
@@ -1436,8 +1437,9 @@ class StadiumMapperGUI:
         table_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
 
         cols = ("status", "stadium_name", "stadium_id", "web_club", "team_id", "confidence")
-        self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", height=12)
+        self.tree = ttk.Treeview(table_frame, columns=cols, show="tree headings", height=12)
 
+        self.tree.heading("#0", text="PREVIEW")
         self.tree.heading("status", text="STATUS")
         self.tree.heading("stadium_name", text="STADIUM FOLDER")
         self.tree.heading("stadium_id", text="STADIUM ID")
@@ -1445,6 +1447,7 @@ class StadiumMapperGUI:
         self.tree.heading("team_id", text="PES TEAM ID")
         self.tree.heading("confidence", text="CONFIDENCE METER")
 
+        self.tree.column("#0", width=75, minwidth=60, anchor=tk.CENTER)
         self.tree.column("status", width=120, anchor=tk.CENTER)
         self.tree.column("stadium_name", width=200)
         self.tree.column("stadium_id", width=90, anchor=tk.CENTER)
@@ -1508,7 +1511,15 @@ class StadiumMapperGUI:
         self.inspector_frame.pack(side=tk.RIGHT, fill=tk.Y)
         self.inspector_frame.pack_propagate(False)
 
-        tk.Label(self.inspector_frame, text="RESEARCH INSPECTOR", font=("Segoe UI", 11, "bold"), fg="#19A7FF", bg="#0B111C").pack(anchor=tk.W, pady=(0, 12))
+        tk.Label(self.inspector_frame, text="RESEARCH INSPECTOR", font=("Segoe UI", 11, "bold"), fg="#19A7FF", bg="#0B111C").pack(anchor=tk.W, pady=(0, 10))
+
+        # Enlarged DDS Stadium Thumbnail Box
+        self.insp_thumb_frame = tk.Frame(self.inspector_frame, bg="#070B12", bd=1, relief=tk.SOLID, height=100)
+        self.insp_thumb_frame.pack(fill=tk.X, pady=(0, 10))
+        self.insp_thumb_frame.pack_propagate(False)
+
+        self.insp_thumb_label = tk.Label(self.insp_thumb_frame, text="NO DDS PREVIEW", font=("Segoe UI", 8, "bold"), fg="#64748B", bg="#070B12")
+        self.insp_thumb_label.pack(fill=tk.BOTH, expand=True)
 
         # Metadata Card
         meta_f = tk.Frame(self.inspector_frame, bg="#121C2A", bd=1, relief=tk.SOLID, padx=10, pady=10)
@@ -1665,25 +1676,27 @@ class StadiumMapperGUI:
                 self.tree.detach(item)
 
     def _populate_tree(self, stadiums: list[DiscoveredStadium]) -> None:
-        """Populate treeview with discovered stadiums."""
+        """Populate treeview with discovered stadiums and live DDS thumbnails."""
         for item in self.tree.get_children():
             self.tree.delete(item)
 
         for s in stadiums:
             name = s.display_name
+            thumb_path = s.get_thumbnail_path()
+            photo = self.dds_loader.get_thumbnail(thumb_path, size=(52, 30))
 
             if name in self.ctrl.manual_mappings and self.ctrl.manual_mappings[name]:
                 rows = self.ctrl.manual_mappings[name]
                 tids_str = ", ".join(str(r.team_id) for r in rows)
                 clubs_str = " / ".join(self.ctrl.pdf_parser.id_to_name.get(r.team_id, f"Team_{r.team_id}") for r in rows)
                 meter = "100% ██████████"
-                self.tree.insert("", tk.END, iid=name, values=(
+                self.tree.insert("", tk.END, iid=name, image=photo, values=(
                     "✏️ MANUAL", rows[0].stadium_name, rows[0].stadium_id, clubs_str, tids_str, meter
                 ), tags=("MANUAL",))
                 continue
 
             if name in self.ctrl.skipped_stadiums:
-                self.tree.insert("", tk.END, iid=name, values=(
+                self.tree.insert("", tk.END, iid=name, image=photo, values=(
                     "● SKIPPED", name, s.primary_id(), "[SKIPPED]", "N/A", "0%"
                 ), tags=("UNRESOLVED",))
                 continue
@@ -1724,7 +1737,7 @@ class StadiumMapperGUI:
                 tag = "UNRESOLVED"
                 status = "❓ UNRESOLVED"
 
-            self.tree.insert("", tk.END, iid=name, values=(
+            self.tree.insert("", tk.END, iid=name, image=photo, values=(
                 status, name, st_id, clubs_str, tids_str, meter
             ), tags=(tag,))
 
@@ -1829,18 +1842,30 @@ class StadiumMapperGUI:
         s_obj = next((s for s in self.ctrl.discovered_stadiums if s.display_name == item_id), None)
         cached_data = self.ctrl.cache.get(item_id) if item_id else None
 
+        # Update enlarged DDS thumbnail image in Inspector
+        if s_obj:
+            thumb_path = s_obj.get_thumbnail_path()
+            photo_large = self.dds_loader.get_thumbnail(thumb_path, size=(160, 90))
+            self.insp_thumb_label.configure(image=photo_large, text="")
+            self.insp_thumb_label.image = photo_large
+        else:
+            placeholder = self.dds_loader.get_placeholder(size=(160, 90))
+            self.insp_thumb_label.configure(image=placeholder, text="")
+            self.insp_thumb_label.image = placeholder
+
         current_sid = (cached_data.get("stadium_id") if cached_data else None) or (s_obj.primary_id() if s_obj else "-")
         self.insp_id_var.set(current_sid)
 
-        if item_id in self.ctrl.manual_mappings:
-            row = self.ctrl.manual_mappings[item_id]
-            club_n = self.ctrl.pdf_parser.id_to_name.get(row.team_id, f"Team_{row.team_id}")
-            self.insp_club_var.set(f"{row.stadium_name} ({club_n})")
-            self.insp_tid_var.set(str(row.team_id))
-            self.insp_id_var.set(row.stadium_id)
+        if item_id in self.ctrl.manual_mappings and self.ctrl.manual_mappings[item_id]:
+            rows = self.ctrl.manual_mappings[item_id]
+            r = rows[0]
+            club_n = self.ctrl.pdf_parser.id_to_name.get(r.team_id, f"Team_{r.team_id}")
+            self.insp_club_var.set(f"{r.stadium_name} ({club_n})")
+            self.insp_tid_var.set(", ".join(str(rw.team_id) for rw in rows))
+            self.insp_id_var.set(r.stadium_id)
             self.insp_conf_var.set("1.00 (Manual)")
             self.insp_status_var.set("● MANUAL OVERRIDE")
-            self.insp_reason_var.set(f"4-Column Override: Team={row.team_id}, ID={row.stadium_id}, Name={row.stadium_name}, Path={row.stadium_path}")
+            self.insp_reason_var.set(f"4-Column Override: {len(rows)} mapping(s) defined.")
             return
 
         if item_id in self.ctrl.skipped_stadiums:
