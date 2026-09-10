@@ -14,6 +14,8 @@ class TopBar(QFrame):
     open_settings_signal = Signal()
     open_contact_admin_signal = Signal()
     theme_changed_signal = Signal(str)
+    launch_game_signal = Signal()
+
 
     def __init__(self, app_version: str = "Nightly Build 1.0.0", parent=None):
         super().__init__(parent)
@@ -58,10 +60,16 @@ class TopBar(QFrame):
         self.btn_music.clicked.connect(self.toggle_music_signal.emit)
         layout.addWidget(self.btn_music)
 
+        self.btn_launch = QPushButton("🚀 Play & Test")
+        self.btn_launch.setStyleSheet("background-color: #35D07F; color: #FFFFFF; font-weight: bold; border: none; padding: 5px 12px; border-radius: 4px;")
+        self.btn_launch.clicked.connect(self.launch_game_signal.emit)
+        layout.addWidget(self.btn_launch)
+
         self.btn_settings = QPushButton("⚙ Settings")
         self.btn_settings.setStyleSheet("background-color: #162232; font-weight: bold; border: none; padding: 5px 10px; border-radius: 4px;")
         self.btn_settings.clicked.connect(self.open_settings_signal.emit)
         layout.addWidget(self.btn_settings)
+
 
         self.btn_contact = QPushButton("💬 Contact Admin")
         self.btn_contact.setStyleSheet("background-color: #162232; font-weight: bold; border: none; padding: 5px 10px; border-radius: 4px;")

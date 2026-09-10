@@ -21,7 +21,9 @@ class Sidebar(QFrame):
     research_clicked = Signal()
     unresolved_clicked = Signal()
     manager_clicked = Signal()
+    comp_manager_clicked = Signal()
     write_map_clicked = Signal()
+
     dry_run_clicked = Signal()
     palette_clicked = Signal()
     provider_changed = Signal(str)
@@ -62,6 +64,12 @@ class Sidebar(QFrame):
         self.btn_manager.setProperty("class", "NavButton")
         self.btn_manager.clicked.connect(self.manager_clicked.emit)
         layout.addWidget(self.btn_manager)
+
+        self.btn_comp = QPushButton("🏆 Competition Manager")
+        self.btn_comp.setProperty("class", "NavButton")
+        self.btn_comp.clicked.connect(self.comp_manager_clicked.emit)
+        layout.addWidget(self.btn_comp)
+
 
         self.btn_write = QPushButton("💾 Write map_teams.txt")
         self.btn_write.setObjectName("BtnWriteMap")

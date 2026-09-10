@@ -21,6 +21,8 @@ class Inspector(QFrame):
     edit_manual_clicked = Signal(str)
     reverify_clicked = Signal(str)
     skip_clicked = Signal(str)
+    preview_clicked = Signal(object)  # Path | None
+
 
     def __init__(self, thumbnail_manager: ThumbnailManager, parent=None):
         super().__init__(parent)
@@ -128,17 +130,27 @@ class Inspector(QFrame):
             return
 
         self.current_stadium_name = state.stadium_name
+        self.current_preview_path = state.preview_path
         self.lbl_folder.setText(state.stadium_name)
         self.lbl_id.setText(state.stadium_id)
         self.lbl_club.setText(state.identified_clubs)
         self.lbl_tid.setText(state.pes_team_ids)
         self.lbl_conf.setText(f"{int(state.confidence * 100)}%")
         self.lbl_status.setText(state.status.value)
-        self.lbl_evidence.setText(state.reasoning or "Identified via web research provider.")
+
+        evidence_text = state.reasoning or "Identified via web research provider."
+        if state.integrity_warnings:
+            evidence_text += "\n\n⚠️ FOLDER INTEGRITY WARNINGS:\n• " + "\n• ".join(state.integrity_warnings)
+        self.lbl_evidence.setText(evidence_text)
 
         # Update enlarged DDS preview pixmap (160x90)
         pixmap = self.thumbnail_mgr.get_pixmap(state.preview_path, size=(160, 90))
         self.lbl_preview.setPixmap(pixmap)
+
+    def mousePressEvent(self, event) -> None:
+        if getattr(self, "current_preview_path", None):
+            self.preview_clicked.emit(self.current_preview_path)
+
 
     def _on_edit_clicked(self) -> None:
         if self.current_stadium_name:

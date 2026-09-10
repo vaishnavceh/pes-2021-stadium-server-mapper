@@ -43,9 +43,13 @@ class StadiumState:
     pes_team_ids: str = "N/A"
     reasoning: str = "No research analysis recorded."
     is_manual: bool = False
-    is_skipped: bool = False
     preview_path: Path | None = None
+    integrity_warnings: list[str] = field(default_factory=list)
     last_updated: str = field(default_factory=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    def has_warnings(self) -> bool:
+        return len(self.integrity_warnings) > 0
+
 
     def primary_team_id(self) -> int | None:
         if self.mapped_rows and self.mapped_rows[0].team_id > 0:

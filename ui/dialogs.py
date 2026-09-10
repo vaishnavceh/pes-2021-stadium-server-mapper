@@ -670,6 +670,45 @@ class CommandPaletteDialog(QDialog):
             cmd_func()
 
 
+class ImagePreviewDialog(QDialog):
+    """Full-screen / HD Image & Media Preview Modal."""
+
+    def __init__(self, image_path: Path | str, title: str = "Stadium Image Preview", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(800, 520)
+        self.setStyleSheet("background-color: #05080D; color: #F1F5F9;")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+
+        lbl_hdr = QLabel(f"🖼️ {title}")
+        lbl_hdr.setStyleSheet("color: #19A7FF; font-size: 14px; font-weight: bold;")
+        layout.addWidget(lbl_hdr)
+
+        lbl_img = QLabel()
+        lbl_img.setAlignment(Qt.AlignCenter)
+
+        p = Path(image_path)
+        if p.exists():
+            from PySide6.QtGui import QPixmap
+            pix = QPixmap(str(p))
+            if not pix.isNull():
+                lbl_img.setPixmap(pix.scaled(760, 420, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            else:
+                lbl_img.setText(f"Unable to decode image format:\n{p.name}")
+        else:
+            lbl_img.setText(f"Image file not found:\n{image_path}")
+
+        lbl_img.setStyleSheet("background-color: #0B111C; border: 1px solid #1E293B; border-radius: 6px; color: #94A3B8;")
+        layout.addWidget(lbl_img, 1)
+
+        btn_close = QPushButton("Close")
+        btn_close.setStyleSheet("background-color: #334155; color: #FFFFFF; font-weight: bold; padding: 6px 16px; border-radius: 4px;")
+        btn_close.clicked.connect(self.accept)
+        layout.addWidget(btn_close, 0, Qt.AlignRight)
+
+
 class SettingsDialog(QDialog):
     """Settings configuration dialog for all AppConfig fields."""
 
@@ -679,7 +718,7 @@ class SettingsDialog(QDialog):
         self.cfg = controller.config
 
         self.setWindowTitle("⚙ Settings — PES Stadium Mapper")
-        self.resize(620, 540)
+        self.resize(640, 580)
         self.setStyleSheet("background-color: #0B111C; color: #F1F5F9;")
 
         layout = QVBoxLayout(self)
@@ -731,12 +770,14 @@ class SettingsDialog(QDialog):
             return edit
 
         # Paths
-        lbl_paths = QLabel("── PATHS ──────────────────────────")
+        lbl_paths = QLabel("── PATHS & LAUNCHER ──────────────────────────")
         lbl_paths.setStyleSheet("color: #334155; font-size: 10px;")
         grid.addWidget(lbl_paths, row, 0, 1, 2); row += 1
 
         self.ed_server_dir = browse_row("Stadium Server Directory", "stadium_server_dir", "e.g. V:/sider/content/stadium-server")
         self.ed_pdf_path = browse_row("Team IDs PDF Path", "team_pdf_path", "e.g. settings_PSM/pdf/PES2021_Team_IDs.pdf")
+        self.ed_sider_exe = browse_row("Sider Executable Path", "sider_exe_path", "e.g. V:/sider/sider.exe")
+        self.ed_game_exe = browse_row("Game Executable Path", "game_exe_path", "e.g. V:/sider/FL2025.exe or PES2021.exe")
         self.ed_music_path = browse_row("Custom Music Path", "custom_music_path", "e.g. settings_PSM/audio/theme.mp3")
         self.ed_logo_path = browse_row("Custom Logo Path", "custom_logo_path", "e.g. settings_PSM/misc/logo.png")
 
@@ -801,7 +842,7 @@ class SettingsDialog(QDialog):
         if is_dir:
             path = QFileDialog.getExistingDirectory(self, "Select Folder", edit.text() or "")
         else:
-            path, _ = QFileDialog.getOpenFileName(self, "Select File", edit.text() or "")
+            path, _ = QFileDialog.getOpenFileName(self, "Select Executable / File", edit.text() or "")
         if path:
             edit.setText(path)
 
@@ -810,6 +851,8 @@ class SettingsDialog(QDialog):
             self.ctrl.config_mgr.update(
                 stadium_server_dir=self.ed_server_dir.text().strip(),
                 team_pdf_path=self.ed_pdf_path.text().strip(),
+                sider_exe_path=self.ed_sider_exe.text().strip(),
+                game_exe_path=self.ed_game_exe.text().strip(),
                 custom_music_path=self.ed_music_path.text().strip(),
                 custom_logo_path=self.ed_logo_path.text().strip(),
                 auto_accept_threshold=float(self.ed_auto_accept.text().strip() or "0.90"),
@@ -824,3 +867,4 @@ class SettingsDialog(QDialog):
             self.accept()
         except ValueError as e:
             QMessageBox.warning(self, "Invalid Value", f"Please check your input values:\n{e}")
+

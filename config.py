@@ -34,12 +34,18 @@ class AppConfig:
     cache_max_age_days: int = 30
     backup_existing_map: bool = True
 
+    # Launcher & Extra Feature Settings
+    game_exe_path: str = ""
+    sider_exe_path: str = ""
+    enable_comp_mapping: bool = True
+
     # Customization & Theme Options
     theme: str = "pes_night"
     play_music_on_start: bool = True
     music_volume: int = 50  # 0 to 100
     custom_music_path: str = ""
     custom_logo_path: str = ""
+
 
     def mask_secret(self, secret: str) -> str:
         """Mask an API key for safe display in UI/logs."""

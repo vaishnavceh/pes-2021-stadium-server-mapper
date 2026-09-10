@@ -348,6 +348,8 @@ class StadiumMapperController:
 
         cached_data = self.cache.get(stadium_name)
 
+        warns = s_obj.warnings if s_obj else []
+
         return StadiumStatusEngine.derive_stadium_state(
             stadium_name=stadium_name,
             stadium_ids=s_ids,
@@ -359,7 +361,71 @@ class StadiumMapperController:
             cache_data=cached_data,
             pdf_team_names=self.pdf_parser.id_to_name,
             resolve_team_tuples_fn=self.matcher.resolve_multiple_team_ids,
+            integrity_warnings=warns,
         )
+
+    def resolve_all_review_stadiums(self) -> int:
+        """Convert all current REVIEW stadiums to RESOLVED by promoting confidence to 1.0."""
+        count = 0
+        states = self.get_all_states()
+        for st in states:
+            if st.status == StadiumStatus.REVIEW:
+                res = self.research_results.get(st.stadium_name)
+                if not res:
+                    c_data = self.cache.get(st.stadium_name) or {}
+                    res = StadiumResearchResult(
+                        stadium_name=st.stadium_name,
+                        club_name=st.identified_clubs,
+                        confidence=1.0,
+                        reasoning="Accepted during REVIEW bulk confirmation.",
+                    )
+                else:
+                    res.confidence = 1.0
+                    res.reasoning += " (Promoted to RESOLVED by user approval)"
+
+                tid = st.primary_team_id()
+                self.cache.put(st.stadium_name, res, team_id=tid)
+                self.research_results[st.stadium_name] = res
+                count += 1
+
+        self.logger.info(f"Promoted {count} REVIEW stadium(s) to RESOLVED status.")
+        return count
+
+    def launch_game(self) -> tuple[bool, str]:
+        """Launch configured sider.exe or game executable."""
+        import subprocess
+
+        sider_path = self.config.sider_exe_path
+        game_path = self.config.game_exe_path
+
+        target_exe = None
+        if sider_path and Path(sider_path).exists():
+            target_exe = Path(sider_path)
+        elif game_path and Path(game_path).exists():
+            target_exe = Path(game_path)
+        else:
+            # Check default locations relative to server_dir or exe_dir
+            server_dir = Path(self.config.stadium_server_dir or str(self.base_dir))
+            for cand in [
+                server_dir.parent / "sider.exe",
+                server_dir / "sider.exe",
+                server_dir.parent / "PES2021.exe",
+                server_dir.parent / "FL2025.exe",
+                server_dir.parent / "FL2024.exe",
+            ]:
+                if cand.exists():
+                    target_exe = cand
+                    break
+
+        if not target_exe:
+            return False, "Executable not found. Please configure sider.exe or game EXE path in Settings."
+
+        try:
+            subprocess.Popen([str(target_exe.resolve())], cwd=str(target_exe.parent.resolve()))
+            return True, f"Successfully launched {target_exe.name}"
+        except Exception as e:
+            return False, f"Failed to launch {target_exe.name}: {e}"
+
 
     def get_all_states(self) -> list[StadiumState]:
         """Get authoritative StadiumState list for all discovered stadiums."""

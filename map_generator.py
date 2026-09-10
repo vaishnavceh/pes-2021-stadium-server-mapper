@@ -195,3 +195,44 @@ class MapGenerator:
             self.logger.error(err_msg)
             return False, err_msg
 
+    def write_competitions_map(self, comp_entries: list[dict[str, str]]) -> tuple[bool, str]:
+        """Write map_competitions.txt file (COMP_ID, STADIUM_ID, STADIUM_NAME, STADIUM_PATH)."""
+        comp_file = self.server_dir / "map_competitions.txt"
+        try:
+            with open(comp_file, "w", encoding="utf-8") as f:
+                f.write("# PES 2021 Stadium Server - Competition Mapping\n")
+                f.write(f"# Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("# Format: COMP_ID,STADIUM_ID,STADIUM_NAME,STADIUM_PATH\n#\n")
+                for entry in comp_entries:
+                    prefix = "#" if entry.get("disabled") else ""
+                    line = f"{prefix}{entry['comp_id']},{entry['stadium_id']},{entry['stadium_name']},{entry['stadium_path']}\n"
+                    f.write(line)
+            msg = f"Successfully updated map_competitions.txt ({len(comp_entries)} entries)."
+            self.logger.info(msg)
+            return True, msg
+        except Exception as e:
+            err_msg = f"Failed to write map_competitions.txt: {e}"
+            self.logger.error(err_msg)
+            return False, err_msg
+
+    def write_comp_finals_map(self, finals_entries: list[dict[str, str]]) -> tuple[bool, str]:
+        """Write map_comp_finals.txt file (COMP_ID, STADIUM_ID, STADIUM_NAME, STADIUM_PATH)."""
+        finals_file = self.server_dir / "map_comp_finals.txt"
+        try:
+            with open(finals_file, "w", encoding="utf-8") as f:
+                f.write("# PES 2021 Stadium Server - Competition Finals Mapping\n")
+                f.write(f"# Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("# Format: COMP_ID,STADIUM_ID,STADIUM_NAME,STADIUM_PATH\n#\n")
+                for entry in finals_entries:
+                    prefix = "#" if entry.get("disabled") else ""
+                    line = f"{prefix}{entry['comp_id']},{entry['stadium_id']},{entry['stadium_name']},{entry['stadium_path']}\n"
+                    f.write(line)
+            msg = f"Successfully updated map_comp_finals.txt ({len(finals_entries)} entries)."
+            self.logger.info(msg)
+            return True, msg
+        except Exception as e:
+            err_msg = f"Failed to write map_comp_finals.txt: {e}"
+            self.logger.error(err_msg)
+            return False, err_msg
+
+

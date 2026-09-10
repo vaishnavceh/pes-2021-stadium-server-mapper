@@ -26,10 +26,13 @@ class StadiumStatusEngine:
         cache_data: dict[str, Any] | None,
         pdf_team_names: dict[int, str],
         resolve_team_tuples_fn: Any,
+        integrity_warnings: list[str] | None = None,
     ) -> StadiumState:
         """Derive authoritative StadiumState for a single stadium folder."""
         st_id = stadium_ids[0] if stadium_ids else "000"
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        warns = integrity_warnings or []
+
 
         # 1. Check explicitly skipped stadiums
         if stadium_name in skipped_stadiums:
@@ -45,6 +48,7 @@ class StadiumStatusEngine:
                 is_manual=False,
                 is_skipped=True,
                 preview_path=thumbnail_path,
+                integrity_warnings=warns,
                 last_updated=timestamp,
             )
 
@@ -65,6 +69,7 @@ class StadiumStatusEngine:
                 is_manual=True,
                 is_skipped=False,
                 preview_path=thumbnail_path,
+                integrity_warnings=warns,
                 last_updated=timestamp,
             )
 
@@ -118,8 +123,10 @@ class StadiumStatusEngine:
             is_manual=False,
             is_skipped=False,
             preview_path=thumbnail_path,
+            integrity_warnings=warns,
             last_updated=timestamp,
         )
+
 
     @staticmethod
     def calculate_statistics(states: Sequence[StadiumState]) -> KPIStatistics:

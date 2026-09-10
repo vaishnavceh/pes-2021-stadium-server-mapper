@@ -24,10 +24,37 @@ class DiscoveredStadium:
     stadium_ids: list[str]  # e.g. ["004", "007"]
     full_path: Path
     relative_path: str
+    has_valid_assets: bool = True
+    warnings: list[str] = field(default_factory=list)
+
+    def check_integrity(self) -> list[str]:
+        """Perform non-blocking folder structure health checks."""
+        self.warnings.clear()
+        if not self.full_path or not self.full_path.exists():
+            self.warnings.append("Folder does not exist on disk")
+            self.has_valid_assets = False
+            return self.warnings
+
+        asset_bg = self.full_path / "Asset" / "model" / "bg"
+        common_bg = self.full_path / "common" / "bg"
+        if not asset_bg.exists() and not common_bg.exists():
+            self.warnings.append("Missing standard Asset/model/bg or common/bg structure")
+
+        # Check for empty folder or zero files
+        try:
+            file_count = sum(1 for _ in self.full_path.rglob("*") if _.is_file())
+            if file_count < 2:
+                self.warnings.append("Folder contains no stadium model files")
+        except Exception:
+            pass
+
+        self.has_valid_assets = (len(self.warnings) == 0)
+        return self.warnings
 
     def primary_id(self) -> str:
         """Return the primary (first) stadium ID."""
         return self.stadium_ids[0] if self.stadium_ids else "000"
+
 
     def get_thumbnail_path(self) -> Path | None:
         """Find the DDS thumbnail file for this stadium if present."""
@@ -121,10 +148,12 @@ class StadiumScanner:
                 full_path=entry,
                 relative_path=rel_path,
             )
+            stadium.check_integrity()
             stadiums.append(stadium)
             self.logger.info(
-                f"Discovered: '{display_name}' → IDs: {', '.join(st_ids)} | Search Query: '{search_name}'"
+                f"Discovered: '{display_name}' → IDs: {', '.join(st_ids)} | Search Query: '{search_name}' | Warnings: {len(stadium.warnings)}"
             )
+
 
         self.logger.info(f"Total stadiums discovered: {len(stadiums)}")
         return stadiums

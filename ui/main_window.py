@@ -26,11 +26,13 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from ui.comp_dialog import CompetitionManagerDialog
 from ui.dashboard import Dashboard
 from ui.dialogs import (
     CommandPaletteDialog,
     ContactAdminDialog,
     EditManualMapDialog,
+    ImagePreviewDialog,
     UnresolvedResolverDialog,
 )
 from ui.inspector import Inspector
@@ -39,6 +41,7 @@ from ui.stadium_manager import StadiumManagerDialog
 from ui.stadium_table import StadiumTableView
 from ui.toast import ToastNotification
 from ui.topbar import TopBar
+
 
 
 
@@ -132,6 +135,7 @@ class MainWindow(QMainWindow):
         self.topbar.toggle_music_signal.connect(self._toggle_music)
         self.topbar.open_settings_signal.connect(self._open_settings)
         self.topbar.open_contact_admin_signal.connect(self._open_contact_admin)
+        self.topbar.launch_game_signal.connect(self._cmd_launch_game)
         main_layout.addWidget(self.topbar)
 
         # 2. MIDDLE WORKSPACE SPLITTER (Sidebar | Center Workspace | Inspector)
@@ -145,7 +149,9 @@ class MainWindow(QMainWindow):
         self.sidebar.research_clicked.connect(self.cmd_research)
         self.sidebar.unresolved_clicked.connect(self.cmd_open_unresolved_resolver)
         self.sidebar.manager_clicked.connect(self._open_stadium_manager)
+        self.sidebar.comp_manager_clicked.connect(self._open_comp_manager)
         self.sidebar.write_map_clicked.connect(self.cmd_generate)
+
         self.sidebar.dry_run_clicked.connect(self.cmd_dry_run)
         self.sidebar.palette_clicked.connect(self._open_command_palette)
         self.sidebar.provider_changed.connect(self._on_provider_changed)
@@ -208,10 +214,12 @@ class MainWindow(QMainWindow):
         self.inspector.edit_manual_clicked.connect(self._open_edit_manual_dialog)
         self.inspector.reverify_clicked.connect(self._reverify_stadium)
         self.inspector.skip_clicked.connect(self._skip_stadium)
+        self.inspector.preview_clicked.connect(self._open_image_preview)
         splitter.addWidget(self.inspector)
 
         splitter.setSizes([240, 840, 300])
         main_layout.addWidget(splitter, 1)
+
 
     # ===================================================================
     # SINGLE AUTHORITATIVE STATE SYNCHRONIZATION ENGINE
@@ -302,6 +310,23 @@ class MainWindow(QMainWindow):
     @Slot()
     def cmd_generate(self) -> None:
         """Write map_teams.txt file using authoritative mappings."""
+        # Prompt user if stadiums are in REVIEW state
+        review_stadiums = [s for s in self.ctrl.get_all_states() if s.status == StadiumStatus.REVIEW]
+        if review_stadiums:
+            ans = QMessageBox.question(
+                self,
+                "Pending REVIEW Stadiums Detected",
+                f"You have {len(review_stadiums)} stadium(s) pending in REVIEW state (confidence 0.75-0.89).\n\n"
+                f"Would you like to accept all REVIEW stadiums as RESOLVED and proceed with writing map_teams.txt?",
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                QMessageBox.Yes,
+            )
+            if ans == QMessageBox.Cancel:
+                return
+            elif ans == QMessageBox.Yes:
+                self.ctrl.resolve_all_review_stadiums()
+                self.sync_ui()
+
         success, msg = self.ctrl.generate_map_file()
         if success:
             QMessageBox.information(self, "map_teams.txt Generated", f"✅ {msg}")
@@ -320,6 +345,28 @@ class MainWindow(QMainWindow):
         dlg = StadiumManagerDialog(self.ctrl, self)
         dlg.exec()
         self.sync_ui()
+
+    def _open_comp_manager(self) -> None:
+        """Open Competition & Finals Stadium Manager dialog."""
+        dlg = CompetitionManagerDialog(self.ctrl, self)
+        dlg.exec()
+        self.sync_ui()
+
+    def _cmd_launch_game(self) -> None:
+        """Launch configured sider.exe or game executable."""
+        success, msg = self.ctrl.launch_game()
+        if success:
+            ToastNotification(self, f"🚀 {msg}", "success")
+        else:
+            QMessageBox.warning(self, "Launch Game", f"⚠️ {msg}")
+
+    def _open_image_preview(self, path: Any) -> None:
+        """Open full-screen HD preview for a stadium thumbnail image."""
+        if path:
+            dlg = ImagePreviewDialog(path, title=f"Preview — {Path(path).name}", parent=self)
+            dlg.exec()
+
+
 
     @Slot()
     def cmd_open_unresolved_resolver(self) -> None:
